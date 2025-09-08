@@ -42,8 +42,8 @@ class Database:
 # Instancia global de la base de datos
 # Reemplaza los valores con tu configuración de MySQL
 db = Database(
-    host="localhost",
-    user="tu_usuario_mysql",
-    password="tu_contraseña_mysql",
-    db="chatbot_ciberseguridad"
+    host="bxqbroqqqkbw54z7f0ke-mysql.services.clever-cloud.com",
+    user="uzejlwvrdvvnnbxn",
+    password="pVMUV7bJoIk2BdbQ6LUa",
+    db="bxqbroqqqkbw54z7f0ke"
 )
