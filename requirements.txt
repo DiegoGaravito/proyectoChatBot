@@ -1,0 +1,7 @@
+Flask
+Flask-MySQLdb
+Flask-bcrypt
+transformers
+faiss-cpu
+sentence-transformers
+numpy
