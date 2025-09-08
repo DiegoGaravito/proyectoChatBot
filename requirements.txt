@@ -5,3 +5,4 @@ transformers
 faiss-cpu
 sentence-transformers
 numpy
+Flask-Session  # Nuevo, para sesiones seguras
