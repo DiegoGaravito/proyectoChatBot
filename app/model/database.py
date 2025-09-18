@@ -8,6 +8,7 @@ class Database:
         self.db = db
         self.conn = None
         self.cursor = None
+        self.connect()  # Auto-conectar al inicializar
 
     def connect(self):
         """Establece la conexión con la base de datos."""
@@ -17,30 +18,43 @@ class Database:
                 user=self.user,
                 passwd=self.password,
                 db=self.db,
-                autocommit=True # Para que los cambios se guarden automáticamente
+                autocommit=True
             )
             self.cursor = self.conn.cursor()
             print("Conexión a la base de datos exitosa.")
         except MySQLdb.Error as e:
             print(f"Error al conectar a la base de datos: {e}")
+            self.conn = None
 
     def disconnect(self):
         """Cierra la conexión con la base de datos."""
         if self.conn:
+            self.cursor.close()
             self.conn.close()
             print("Conexión a la base de datos cerrada.")
 
     def execute_query(self, query, params=None):
-        """Ejecuta una consulta SQL y retorna los resultados."""
+        """Ejecuta una consulta SQL. Para SELECT retorna resultados; para otros, commit y lastrowid."""
+        if not self.conn:
+            print("No hay conexión activa.")
+            return None
         try:
-            self.cursor.execute(query, params)
-            return self.cursor.fetchall()
+            if params:
+                self.cursor.execute(query, params)
+            else:
+                self.cursor.execute(query)
+            if query.strip().upper().startswith('SELECT'):
+                return self.cursor.fetchall()
+            else:
+                self.conn.commit()
+                return self.cursor.lastrowid  # Para INSERTs
         except MySQLdb.Error as e:
             print(f"Error al ejecutar la consulta: {e}")
+            if self.conn:
+                self.conn.rollback()
             return None
 
-# Instancia global de la base de datos
-# Reemplaza los valores con tu configuración de MySQL
+# Instancia global (tu config de Clever Cloud)
 db = Database(
     host="bxqbroqqqkbw54z7f0ke-mysql.services.clever-cloud.com",
     user="uzejlwvrdvvnnbxn",

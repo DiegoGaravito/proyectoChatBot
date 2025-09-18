@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <title>Chatbot DIEGO Y KAREN</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div id="chat-container">
+        <div id="messages"></div>
+        <div id="input-container">
+            <input type="text" id="mensaje" placeholder="Escribe tu mensaje...">
+            <button id="send">Enviar</button>
+        </div>
+    </div>
+
+    <script>
+        $('#send').click(function() {
+            var msg = $('#mensaje').val();
+            if (!msg) return;
+
+            // mensaje del usuario
+            $('#messages').append('<div class="message user"><strong>Tú:</strong> ' + msg + '</div>');
+            $('#messages').scrollTop($('#messages')[0].scrollHeight);
+
+            $.ajax({
+                url: '/chat',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({mensaje: msg}),
+                success: function(data) {
+                    $('#messages').append('<div class="message bot"><strong>Diego:</strong> ' + data.respuesta + '</div>');
+                    $('#messages').scrollTop($('#messages')[0].scrollHeight);
+                },
+                error: function() {
+                    $('#messages').append('<div class="message bot"><strong>Error:</strong> No se pudo enviar el mensaje.</div>');
+                }
+            });
+
+            $('#mensaje').val('');
+        });
+
+        // enviar con Enter
+        $('#mensaje').keypress(function(e) {
+            if (e.which == 13) { $('#send').click(); }
+        });
+    </script>
+</body>
+</html>
