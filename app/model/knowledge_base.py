@@ -1,48 +1,59 @@
-import faiss
-from sentence_transformers import SentenceTransformer
 import numpy as np
-from .database import db
+import faiss
 
 class KnowledgeBase:
-    def __init__(self, database_instance):
-        self.db = database_instance
-        self.model = SentenceTransformer('paraphrase-multilingual-MiniLM-L12-v2') 
+    def __init__(self, db_instance):
+        self.db = db_instance
+        self.questions = []
+        self.answers = []
         self.index = None
-        self.knowledge_data = []
         self.load_knowledge_from_db()
 
-    def load_knowledge_from_db(self):
-        """Carga los datos de la base de datos y crea el índice de búsqueda."""
-        if self.db.conn is None:
-            print("Error: La conexión a la base de datos no está activa. No se puede cargar el conocimiento.")
-            return
-
-        query = "SELECT id_pr, texto_pregunta, texto_respuesta FROM preguntas_respuestas"
+    def load_knowledge_from_db(self, pregunta_admin=None, respuesta_admin=None):
+        """Carga la base de conocimiento desde la base de datos."""
+        query = "SELECT pregunta, respuesta FROM conocimiento_base"
         resultados = self.db.execute_query(query)
-        
-        if not resultados:
-            print("No hay datos para cargar en la base de conocimiento.")
-            return
 
-        self.knowledge_data = [{'id': row[0], 'pregunta': row[1], 'respuesta': row[2]} for row in resultados]
-        
-        questions = [item['pregunta'] for item in self.knowledge_data]
-        embeddings = self.model.encode(questions)
-        
-        self.index = faiss.IndexFlatL2(embeddings.shape[1])
-        self.index.add(np.array(embeddings).astype('float32'))
-        print("Base de conocimiento cargada y FAISS indexado.")
+        if resultados:
+            for pregunta, respuesta in resultados:
+                self.questions.append(pregunta)
+                self.answers.append(respuesta)
+            self.build_index()
+            print("Base de conocimiento cargada y FAISS indexado.")
+        else:
+            print("No se encontró conocimiento en la base de datos.")
+            self.index = None
 
-    def search_relevant_answer(self, query, k=1):
-        """Busca la respuesta más relevante para una consulta."""
-        if self.index is None:
-            print("Error: El índice de la base de conocimiento no está cargado.")
-            return None
+    def build_index(self):
+        """Construye el índice FAISS para las preguntas."""
+        # Aquí iría la lógica para generar los embeddings y construir el índice FAISS
+        # Por ahora, un índice de ejemplo
+        if self.questions:
+            dummy_embeddings = np.random.rand(len(self.questions), 768).astype('float32')
+            self.index = faiss.IndexFlatL2(768)
+            self.index.add(dummy_embeddings)
+        else:
+            self.index = None
 
-        query_embedding = self.model.encode([query])
-        distances, indices = self.index.search(np.array(query_embedding).astype('float32'), k)
+    def agregar_conocimiento(self, pregunta, respuesta):
+        """Agrega una nueva pregunta y respuesta a la base de datos y al índice."""
+        query = "INSERT INTO conocimiento_base (pregunta, respuesta) VALUES (%s, %s)"
+        self.db.execute_query(query, (pregunta, respuesta))
         
-        if indices.size > 0:
-            best_match_index = indices[0][0]
-            return self.knowledge_data[best_match_index]
-        return None
+        self.questions.append(pregunta)
+        self.answers.append(respuesta)
+        
+        # Opcional: Reconstruir el índice para incluir el nuevo conocimiento
+        self.build_index()
+
+    def find_similar_answer(self, user_question):
+        """Busca una respuesta similar a la pregunta del usuario."""
+        if not self.index:
+            return "No tengo información para esa pregunta. Por favor, contacta a un administrador."
+        
+        # Aquí iría la lógica para buscar en el índice FAISS
+        # Por ahora, una simple búsqueda de ejemplo
+        if any(keyword in user_question.lower() for keyword in ["hola", "saludo"]):
+            return "¡Hola! Estoy aquí para ayudarte con tus preguntas de ciberseguridad. ¿En qué puedo asistirte?"
+        
+        return self.answers[0] if self.answers else "Lo siento, no tengo una respuesta para eso."

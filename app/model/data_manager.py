@@ -1,53 +1,59 @@
-from .database import db
-from flask_bcrypt import generate_password_hash, check_password_hash
+import MySQLdb
+from flask_bcrypt import check_password_hash
+from .database import db # Agrega esta línea para importar db
 
 class DataManager:
-    """Gestiona todas las operaciones CRUD del proyecto."""
+    def __init__(self, db_instance):
+        self.db = db_instance
+        self.bcrypt = None
 
-    def __init__(self):
-        self.db = db
-
-    # ------------------ Gestión de Usuarios ------------------
-    def crear_usuario(self, nombre_usuario, email, contrasena):
-        """Inserta un nuevo usuario en la base de datos."""
-        hash_contrasena = generate_password_hash(contrasena).decode('utf-8')
-        query = "INSERT INTO usuarios (nombre_usuario, email, hash_contrasena) VALUES (%s, %s, %s)"
-        return self.db.execute_query(query, (nombre_usuario, email, hash_contrasena))
-
-    def obtener_usuario_por_email(self, email):
-        """Busca un usuario por su email."""
-        query = "SELECT * FROM usuarios WHERE email = %s"
-        resultados = self.db.execute_query(query, (email,))
-        return resultados[0] if resultados else None  # Retorna el primer usuario o None
-
-    def verificar_login(self, email, contrasena):
-        """Verifica credenciales y retorna ID de usuario si es válido."""
-        usuario = self.obtener_usuario_por_email(email)
-        if usuario and check_password_hash(usuario[3], contrasena):  # Ajustado a índice 3 si columnas son id=0, nombre=1, email=2, hash=3
-            return usuario[0]  # Retorna ID (índice 0)
+    def obtener_usuario_por_id(self, user_id):
+        """Obtiene los datos de un usuario por su ID, ya sea administrador o usuario regular."""
+        # Intenta buscar al usuario como administrador
+        query_admin = "SELECT id_admin as id, hash_contrasena, es_super_admin FROM administradores WHERE id_admin = %s"
+        resultado = self.db.execute_query(query_admin, (user_id,))
+        
+        if resultado:
+            columns = [desc[0] for desc in self.db.cursor.description]
+            return dict(zip(columns, resultado[0]))
+        
+        # Si no es administrador, intenta buscarlo como usuario regular
+        query_usuario = "SELECT id_usuario as id, hash_contrasena, '0' as es_super_admin FROM usuarios WHERE id_usuario = %s"
+        resultado_usuario = self.db.execute_query(query_usuario, (user_id,))
+        
+        if resultado_usuario:
+            columns = [desc[0] for desc in self.db.cursor.description]
+            return dict(zip(columns, resultado_usuario[0]))
+        
         return None
 
-    # ------------------ Gestión de Preguntas y Respuestas (PR) ------------------
-    def obtener_respuesta_por_pregunta(self, texto_pregunta):
-        """Busca una respuesta a una pregunta (fallback si KB falla)."""
-        query = "SELECT texto_respuesta FROM preguntas_respuestas WHERE texto_pregunta LIKE %s LIMIT 1"
-        resultados = self.db.execute_query(query, (f'%{texto_pregunta}%',))
-        return resultados[0][0] if resultados else None
-
-    def insertar_pr(self, texto_pregunta, texto_respuesta, id_tema, id_admin):
-        """Inserta una nueva pregunta y respuesta y registra la acción."""
-        query = "INSERT INTO preguntas_respuestas (texto_pregunta, texto_respuesta, id_tema) VALUES (%s, %s, %s)"
-        id_pr = self.db.execute_query(query, (texto_pregunta, texto_respuesta, id_tema))
+    def verificar_credenciales_admin(self, email, password):
+        """Verifica las credenciales de un administrador."""
+        query = "SELECT id_admin, hash_contrasena, es_super_admin FROM administradores WHERE email = %s"
+        resultado = self.db.execute_query(query, (email,))
         
-        if id_pr:  # Registrar en logs si quieres (opcional)
-            self.db.execute_query("INSERT INTO registros_pr (id_pr, id_admin, accion) VALUES (%s, %s, 'INSERTAR')", (id_pr, id_admin))
-        return id_pr
-    
-    # ------------------ Gestión de Historial de Chat ------------------
-    def guardar_historial_chat(self, id_usuario, mensaje, respuesta):
-        """Guarda la conversación en el historial."""
-        query = "INSERT INTO historial_chat (id_usuario, texto_mensaje, texto_respuesta) VALUES (%s, %s, %s)"
-        self.db.execute_query(query, (id_usuario, mensaje, respuesta))
+        if resultado and self.bcrypt:
+            hash_contrasena_db = resultado[0][1]
+            if self.bcrypt.check_password_hash(hash_contrasena_db, password):
+                return {
+                    'id': resultado[0][0], 
+                    'es_super_admin': bool(resultado[0][2])
+                }
+        return None
 
-# Instancia global
-data_manager = DataManager()
+    def verificar_credenciales_usuario(self, email, password):
+        """Verifica las credenciales de un usuario regular."""
+        query = "SELECT id_usuario, hash_contrasena FROM usuarios WHERE email = %s"
+        resultado = self.db.execute_query(query, (email,))
+        
+        if resultado and self.bcrypt:
+            hash_contrasena_db = resultado[0][1]
+            if self.bcrypt.check_password_hash(hash_contrasena_db, password):
+                return {
+                    'id': resultado[0][0], 
+                    'es_super_admin': 0  # 0 indica que no es un super_admin
+                }
+        return None
+    
+# Instancia global del DataManager
+data_manager = DataManager(db)

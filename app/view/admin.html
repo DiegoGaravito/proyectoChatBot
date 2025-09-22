@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Administración</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <h3>Panel de Administración</h3>
+            <a href="{{ url_for('logout') }}" class="logout-btn">Cerrar Sesión</a>
+        </header>
+
+        <section class="admin-section">
+            <h4>Agregar Conocimiento</h4>
+            <form id="add-knowledge-form">
+                <div class="form-group">
+                    <label for="question">Pregunta (Usuario):</label>
+                    <input type="text" id="question" name="question" required>
+                </div>
+                <div class="form-group">
+                    <label for="answer">Respuesta (Chatbot):</label>
+                    <textarea id="answer" name="answer" rows="4" required></textarea>
+                </div>
+                <button type="submit">Guardar</button>
+            </form>
+            <p id="message"></p>
+        </section>
+    </div>
+    <script src="{{ url_for('static', filename='js/admin.js') }}"></script>
+</body>
+</html>
