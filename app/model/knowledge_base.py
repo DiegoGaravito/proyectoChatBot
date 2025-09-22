@@ -45,4 +45,4 @@ class KnowledgeBase:
         if indices.size > 0:
             best_match_index = indices[0][0]
             return self.knowledge_data[best_match_index]
-        return None     
+        return None

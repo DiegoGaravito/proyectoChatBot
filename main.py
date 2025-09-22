@@ -1,8 +1,7 @@
-from flask import Flask, request, jsonify, render_template, session, redirect, url_for, flash
-from flask_session import Session  # Para manejar sesiones seguras
-from app.model.database import db  # Importa la instancia global de Database
+from flask import Flask, request, jsonify, render_template, redirect, url_for, session
+from flask_login import LoginManager, UserMixin, login_user, logout_user, login_required, current_user
+from app.model.database import db
 from app.model.knowledge_base import KnowledgeBase
-from app.model.data_manager import data_manager  # Importa la instancia global de DataManager
 from app.viewmodel.chatbot_logic import ChatbotViewModel
 
 # Instancias inicializadas como None para que puedan ser asignadas después
@@ -10,71 +9,59 @@ chatbot_vm = None
 knowledge_base_instance = None
 
 app = Flask(__name__, template_folder='app/view', static_folder='app/view/static')
-app.secret_key = 'KAREN123'  # Cambia esto por una clave segura
-app.config['SESSION_TYPE'] = 'filesystem'  # Almacena sesiones en archivos
-Session(app)
+app.secret_key = 'una_clave_super_secreta'
+login_manager = LoginManager()
+login_manager.init_app(app)
+login_manager.login_view = 'login'
 
-@app.route('/')
-def index():
-    """Página principal: Muestra chat si logueado, o redirige a login."""
-    if 'user_id' not in session:
-        return redirect(url_for('login'))
-    return render_template('index.html')
+class User(UserMixin):
+    def __init__(self, id, is_admin=False):
+        self.id = id
+        self.is_admin = is_admin
 
-@app.route('/register', methods=['GET', 'POST'])
-def register():
-    """Ruta para registrar un nuevo usuario."""
-    if request.method == 'POST':
-        data = request.form
-        nombre = data.get('nombre')
-        email = data.get('email')
-        password = data.get('password')
-        try:
-            user_id = data_manager.crear_usuario(nombre, email, password)
-            if user_id:
-                flash('Usuario registrado exitosamente. Ahora inicia sesión.')
-                return redirect(url_for('login'))
-            else:
-                flash('Error al registrar. El email ya existe o datos inválidos.')
-        except Exception as e:
-            flash(f'Error: {str(e)}')
-    return render_template('register.html')
+    def is_admin_user(self):
+        return self.is_admin
+
+    def get_id(self):
+        return str(self.id)
+
+@login_manager.user_loader
+def load_user(user_id):
+    return User(user_id)
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    """Ruta para iniciar sesión."""
     if request.method == 'POST':
-        data = request.form
-        email = data.get('email')
-        password = data.get('password')
-        user_id = data_manager.verificar_login(email, password)  # Método que agregamos en data_manager
-        if user_id:
-            session['user_id'] = user_id
-            flash('Login exitoso!')
-            return redirect(url_for('index'))
-        else:
-            flash('Credenciales inválidas.')
+        user = User(1)
+        login_user(user)
+        return redirect(url_for('chat_page'))
     return render_template('login.html')
 
 @app.route('/logout')
+@login_required
 def logout():
-    """Cierra la sesión."""
-    session.pop('user_id', None)
-    flash('Sesión cerrada.')
+    logout_user()
     return redirect(url_for('login'))
 
-@app.route('/chat', methods=['POST'])
-def chat():
-    """Procesa mensajes del chat, solo si logueado."""
-    if 'user_id' not in session:
-        return jsonify({"error": "Debes iniciar sesión para chatear"}), 401
-    
+@app.route('/chat')
+@login_required
+def chat_page():
+    return render_template('chatbot.html')
+
+@app.route('/admin')
+@login_required
+def admin_page():
+    return render_template('admin.html')
+
+@app.route('/chat_api', methods=['POST'])
+@login_required
+def chat_api():
     data = request.json
     mensaje_usuario = data.get('mensaje')
-    id_usuario = session['user_id']  # Usa el ID de la sesión
+    id_usuario = current_user.id
     
     if not mensaje_usuario:
-        return jsonify({"error": "Mensaje vacío"}), 400
+        return jsonify({"error": "Faltan datos en la solicitud"}), 400
 
     if chatbot_vm:
         respuesta_chatbot = chatbot_vm.procesar_mensaje(id_usuario, mensaje_usuario)
@@ -83,22 +70,14 @@ def chat():
         return jsonify({"error": "El servicio de chatbot no está disponible. Por favor, inténtalo más tarde."}), 503
 
 if __name__ == '__main__':
-    # La conexión a BD se hace automáticamente en database.py
-    # Pero verificamos si está conectada
-    if not db.conn:
-        print("Error: No se pudo conectar a la BD. Revisa credenciales en database.py")
-        exit(1)
+    db.connect()
     
-    # Inicializar la base de conocimiento SOLO si la conexión fue exitosa
-    print("Inicializando base de conocimiento...")
-    knowledge_base_instance = KnowledgeBase(db)
-    
-    # Inicializar el ViewModel solo si la base de conocimiento se cargó correctamente
-    if knowledge_base_instance and knowledge_base_instance.index:
-        chatbot_vm = ChatbotViewModel(knowledge_base_instance)
-        print("Chatbot inicializado correctamente.")
+    if db.conn:
+        knowledge_base_instance = KnowledgeBase(db)
+        if knowledge_base_instance.index is not None:
+            chatbot_vm = ChatbotViewModel(knowledge_base_instance)
+            app.run(debug=True)
+        else:
+            print("La aplicación no se iniciará. No se pudo cargar la base de conocimiento.")
     else:
-        print("Error: No se pudo inicializar la base de conocimiento. Verifica datos en BD.")
-    
-    # Ejecuta el servidor Flask
-    app.run(debug=True, host='0.0.0.0', port=5000)  # Para Codespaces
+        print("La aplicación no se iniciará. Error en la conexión a la base de datos.")
